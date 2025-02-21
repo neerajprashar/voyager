@@ -72,35 +72,63 @@ abstract class SchemaManager
      *
      * @return \Illuminate\Support\Collection
      */
+    // public static function describeTable($tableName)
+    // {
+    //     Type::registerCustomPlatformTypes();
+
+    //     $table = static::listTableDetails($tableName);
+
+    //     return collect($table->columns)->map(function ($column) use ($table) {
+    //         $columnArr = Column::toArray($column);
+
+    //         $columnArr['field'] = $columnArr['name'];
+    //         $columnArr['type'] = $columnArr['type']['name'];
+
+    //         // Set the indexes and key
+    //         $columnArr['indexes'] = [];
+    //         $columnArr['key'] = null;
+    //         if ($columnArr['indexes'] = $table->getColumnsIndexes($columnArr['name'], true)) {
+    //             // Convert indexes to Array
+    //             foreach ($columnArr['indexes'] as $name => $index) {
+    //                 $columnArr['indexes'][$name] = Index::toArray($index);
+    //             }
+
+    //             // If there are multiple indexes for the column
+    //             // the Key will be one with highest priority
+    //             $indexType = array_values($columnArr['indexes'])[0]['type'];
+    //             $columnArr['key'] = substr($indexType, 0, 3);
+    //         }
+
+    //         return $columnArr;
+    //     });
+    // }
     public static function describeTable($tableName)
     {
-        Type::registerCustomPlatformTypes();
+        $columns = Schema::getColumnListing($tableName);
 
-        $table = static::listTableDetails($tableName);
+        $result = collect($columns)->mapWithKeys(function ($column) use ($tableName) {
+            $columnDetails = static::getColumnDetails($tableName, $column);
+            $indexes = static::getColumnIndexes($tableName, $column);
 
-        return collect($table->columns)->map(function ($column) use ($table) {
-            $columnArr = Column::toArray($column);
-
-            $columnArr['field'] = $columnArr['name'];
-            $columnArr['type'] = $columnArr['type']['name'];
-
-            // Set the indexes and key
-            $columnArr['indexes'] = [];
-            $columnArr['key'] = null;
-            if ($columnArr['indexes'] = $table->getColumnsIndexes($columnArr['name'], true)) {
-                // Convert indexes to Array
-                foreach ($columnArr['indexes'] as $name => $index) {
-                    $columnArr['indexes'][$name] = Index::toArray($index);
-                }
-
-                // If there are multiple indexes for the column
-                // the Key will be one with highest priority
-                $indexType = array_values($columnArr['indexes'])[0]['type'];
-                $columnArr['key'] = substr($indexType, 0, 3);
+            if (!empty($indexes) && isset($indexes[1])) {
+                $indexes = [$indexes[1]];
             }
+            $type = $indexes[array_key_first($indexes)]['type'] ?? null;
 
-            return $columnArr;
+            return [
+                $column => [
+                    'field' => $column,
+                    'type' => $columnDetails['type'],
+                    'null' => $columnDetails['nullable'],
+                    'key' => !empty($type) ? substr($type, 0, 3) : null,
+                    'default' => $columnDetails['default'],
+                    'extra' => $columnDetails['auto_increment'] ? 'auto_increment' : '',
+                    'indexes' => $indexes,
+                ]
+            ];
         });
+
+        return $result;
     }
 
     public static function listTableColumnNames($tableName)
